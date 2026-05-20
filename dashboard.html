@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ryan's Job Search Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a24;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #f0f0f8;
+    --muted: #7b7b9a;
+    --accent: #7c6df0;
+    --accent2: #a594f9;
+    --green: #3ecf8e;
+    --red: #f06060;
+    --amber: #f0b060;
+    --blue: #60a0f0;
+    --font-head: 'Syne', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    top: -40%;
+    left: -20%;
+    width: 60%;
+    height: 60%;
+    background: radial-gradient(ellipse, rgba(124,109,240,0.12) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .shell { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+  /* header */
+  header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 2.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .logo { font-family: var(--font-head); font-weight: 800; font-size: 1.6rem; letter-spacing: -0.03em; color: var(--text); }
+  .logo span { color: var(--accent2); }
+  .status-bar { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* stats row */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 2rem; }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem 1rem;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .stat-card:hover { border-color: var(--border2); }
+  .stat-card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    border-radius: 12px 12px 0 0;
+  }
+  .stat-card.total::after { background: var(--accent); }
+  .stat-card.interviews::after { background: var(--green); }
+  .stat-card.rejected::after { background: var(--red); }
+  .stat-card.pending::after { background: var(--amber); }
+  .stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin-bottom: 8px; }
+  .stat-num { font-family: var(--font-head); font-size: 2.4rem; font-weight: 800; line-height: 1; }
+  .stat-card.total .stat-num { color: var(--accent2); }
+  .stat-card.interviews .stat-num { color: var(--green); }
+  .stat-card.rejected .stat-num { color: var(--red); }
+  .stat-card.pending .stat-num { color: var(--amber); }
+  .stat-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  /* chart + recent row */
+  .two-col { display: grid; grid-template-columns: 1fr 340px; gap: 12px; margin-bottom: 2rem; }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+  }
+  .panel-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+
+  /* donut chart */
+  .chart-wrap { display: flex; align-items: center; gap: 2rem; }
+  .chart-canvas { width: 180px !important; height: 180px !important; flex-shrink: 0; }
+  .chart-legend { display: flex; flex-direction: column; gap: 10px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  /* recent activity */
+  .activity-list { display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto; }
+  .activity-list::-webkit-scrollbar { width: 3px; }
+  .activity-list::-webkit-scrollbar-track { background: transparent; }
+  .activity-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+  .activity-item { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; }
+  .activity-dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+  .activity-text { color: var(--text); line-height: 1.4; }
+  .activity-text .co { font-weight: 500; }
+  .activity-time { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  /* table section */
+  .table-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+  .search-input {
+    flex: 1;
+    min-width: 200px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .search-input::placeholder { color: var(--muted); }
+  .search-input:focus { border-color: var(--accent); }
+
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filter-btn {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    transition: all 0.15s;
+  }
+  .filter-btn:hover { border-color: var(--border2); color: var(--text); }
+  .filter-btn.active { border-color: var(--accent); color: var(--accent2); background: rgba(124,109,240,0.1); }
+
+  /* table */
+  .table-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead { background: var(--surface2); }
+  th {
+    text-align: left;
+    padding: 10px 14px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    font-weight: 500;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    vertical-align: middle;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .company-cell { font-weight: 500; color: var(--text); white-space: nowrap; }
+  .role-cell { color: var(--muted); font-size: 12px; max-width: 220px; }
+  .date-cell { color: var(--muted); font-size: 11px; white-space: nowrap; }
+  .notes-cell { font-size: 11px; color: var(--muted); max-width: 200px; }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .badge-applied { background: rgba(96,160,240,0.12); color: var(--blue); border: 1px solid rgba(96,160,240,0.25); }
+  .badge-rejected { background: rgba(240,96,96,0.12); color: var(--red); border: 1px solid rgba(240,96,96,0.25); }
+  .badge-interview { background: rgba(62,207,142,0.12); color: var(--green); border: 1px solid rgba(62,207,142,0.25); }
+  .badge-pending { background: rgba(240,176,96,0.12); color: var(--amber); border: 1px solid rgba(240,176,96,0.25); }
+  .badge::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+
+  .empty { text-align: center; padding: 3rem; color: var(--muted); font-size: 13px; }
+
+  .refresh-btn {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .refresh-btn:hover { border-color: var(--accent); color: var(--accent2); }
+  .refresh-btn.loading { opacity: 0.5; pointer-events: none; }
+
+  .error-banner {
+    background: rgba(240,96,96,0.1);
+    border: 1px solid rgba(240,96,96,0.3);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 12px;
+    color: var(--red);
+    margin-bottom: 1rem;
+    display: none;
+  }
+
+  @media (max-width: 900px) {
+    .two-col { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 500px) {
+    .stats { grid-template-columns: 1fr 1fr; }
+    .chart-wrap { flex-direction: column; }
+  }
+
+  /* edit modal */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100; align-items:center; justify-content:center; }
+  .modal-overlay.open { display:flex; }
+  .modal { background:var(--surface); border:1px solid var(--border2); border-radius:16px; padding:2rem; width:480px; max-width:90vw; }
+  .modal-title { font-family:var(--font-head); font-size:1.1rem; font-weight:700; margin-bottom:1.5rem; color:var(--text); }
+  .field { margin-bottom:1rem; }
+  .field label { display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.1em; color:var(--muted); margin-bottom:6px; }
+  .field input, .field select { width:100%; background:var(--surface2); border:1px solid var(--border2); border-radius:8px; padding:8px 12px; color:var(--text); font-family:var(--font-mono); font-size:13px; outline:none; }
+  .field input:focus, .field select:focus { border-color:var(--accent); }
+  .field select option { background:var(--surface2); }
+  .modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:1.5rem; }
+  .btn-cancel { font-family:var(--font-mono); font-size:12px; padding:8px 16px; border-radius:8px; border:1px solid var(--border2); background:transparent; color:var(--muted); cursor:pointer; }
+  .btn-save { font-family:var(--font-mono); font-size:12px; padding:8px 16px; border-radius:8px; border:1px solid var(--accent); background:rgba(124,109,240,0.15); color:var(--accent2); cursor:pointer; }
+  .btn-save:hover { background:rgba(124,109,240,0.3); }
+  .btn-fetch { font-family:var(--font-mono); font-size:11px; padding:5px 12px; border-radius:6px; border:1px solid var(--border2); background:transparent; color:var(--muted); cursor:pointer; margin-top:6px; }
+  .btn-fetch:hover { color:var(--text); border-color:var(--accent); }
+  tr.editable { cursor:pointer; }
+  tr.editable:hover td { background:rgba(124,109,240,0.06); }
+  .edit-hint { font-size:10px; color:var(--muted); text-align:right; margin-bottom:6px; }
+
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header>
+    <div>
+      <div class="logo">Job Search <span>Dashboard</span></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;">Ryan Berkeley · ryanberkeley@live.com</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="status-bar"><div class="dot"></div><span id="last-updated">Connecting...</span></div>
+      <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
+      <button class="refresh-btn" id="sync-btn" onclick="syncRejections()" style="border-color:var(--red);color:var(--red);">⚡ Sync Rejections</button>
+    </div>
+  </header>
+
+  <div id="sync-banner" style="display:none;background:rgba(62,207,142,0.1);border:1px solid rgba(62,207,142,0.3);border-radius:8px;padding:12px 16px;font-size:12px;color:var(--green);margin-bottom:1rem;"></div>
+  <div class="error-banner" id="error-banner">
+    Could not connect to local server at <strong>http://localhost:8080</strong>. Make sure your Python server is running.
+  </div>
+
+  <div class="stats">
+    <div class="stat-card total">
+      <div class="stat-label">Total Applied</div>
+      <div class="stat-num" id="s-total">—</div>
+      <div class="stat-sub">since Jan 2026</div>
+    </div>
+    <div class="stat-card interviews">
+      <div class="stat-label">Interviews</div>
+      <div class="stat-num" id="s-interviews">—</div>
+      <div class="stat-sub" id="s-interview-rate">response rate</div>
+    </div>
+    <div class="stat-card rejected">
+      <div class="stat-label">Rejections</div>
+      <div class="stat-num" id="s-rejected">—</div>
+      <div class="stat-sub" id="s-reject-rate">of applications</div>
+    </div>
+    <div class="stat-card pending">
+      <div class="stat-label">Awaiting Reply</div>
+      <div class="stat-num" id="s-pending">—</div>
+      <div class="stat-sub">no response yet</div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="panel">
+      <div class="panel-title">Status Breakdown</div>
+      <div class="chart-wrap">
+        <canvas class="chart-canvas" id="donut"></canvas>
+        <div class="chart-legend" id="chart-legend"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Recent Activity</div>
+      <div class="activity-list" id="activity-list">
+        <div class="empty">Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-bottom:1rem;"><div class="edit-hint">Click any row to edit · changes saved locally</div>
+    <div class="table-controls">
+      <input class="search-input" type="text" placeholder="Search company or role..." id="search" oninput="renderTable()">
+      <div class="filters">
+        <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
+        <button class="filter-btn" onclick="setFilter('interview',this)">Interview</button>
+        <button class="filter-btn" onclick="setFilter('pending',this)">Pending</button>
+        <button class="filter-btn" onclick="setFilter('applied',this)">Applied</button>
+        <button class="filter-btn" onclick="setFilter('rejected',this)">Rejected</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-panel">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Company</th>
+            <th>Role</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="5" class="empty">Loading applications...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="margin-top:1rem;font-size:10px;color:var(--muted);text-align:center;">
+    Powered by local MCP server · localhost:8080 · Auto-refreshes every 5 minutes
+  </div>
+
+</div>
+
+<script>
+const SERVER = 'http://localhost:8080';
+let allApps = [];
+let currentFilter = 'all';
+let donutChart = null;
+
+function classifyEmail(email) {
+  const subjRaw = email.subject || '';
+  const subj = subjRaw.toLowerCase();
+  const preview = (email.bodyPreview || '').toLowerCase();
+  const fromAddr = (email.from?.emailAddress?.address || '').toLowerCase();
+  const fromName = (email.from?.emailAddress?.name || '');
+  const combined = subj + ' ' + preview;
+
+  // skip own emails and obvious non-job senders
+  if (fromAddr.includes('ryanberkeley@live.com') || fromAddr.includes('angelakberkeley')) return null;
+  const skipSenders = ['capitalone','priceline','target','walmart','appsumo','coinbase',
+    'okx.com','nextdoor','getflex','paypal','eset.com','risecredit','lendingclub',
+    'jobright.ai','aiapply.co','myperfectresume','mg.myperfectresume','jobscan',
+    'theladders','linkedin.com','messages-noreply','updates-noreply','newsletters-noreply',
+    'jobalerts-noreply','jobs-noreply@linkedin','vanguardhr','costco','square.com'];
+  if (skipSenders.some(s => fromAddr.includes(s))) return null;
+
+  // skip non-application subjects
+  const skipSubjects = ['security code','verification code','upgrade your outdoor',
+    'grow with square','learning spotlight','deal of the day','monster may',
+    'build different','hireready newsletter','your resume is ready','welcome to jobright',
+    'welcome to aiapply','welcome to jobscan','auto-apply','cover letter','mock interview',
+    'your deposit','your payment','card declined','overdrawn','withdrawal notice',
+    'pay in 4','loan request','loan is being processed','scams','check has been deposited'];
+  if (skipSubjects.some(s => subj.includes(s))) return null;
+
+  const jobSenders = ['greenhouse-mail','greenhouse-jobs','ashbyhq','myworkday','workday',
+    'lever.co','hire.lever','icims','bamboohr','brassring','smartrecruiters','taleo',
+    'gem.com','schepmontjobs','careerscape','appfolio.com','doordash.com','workablemail',
+    'dayforcehcm','adp.com','recruitment.americanexpress','lplfinancial','achievecareers',
+    'cs-recruiters','candidates.workablemail','trm.brassring','talent.icims',
+    'opisgroup','hr.lplfinancial','schepmontjobs','nationaldebtrelief'];
+  const isJobSender = jobSenders.some(s => fromAddr.includes(s));
+
+  const jobKeywords = ['thank you for applying','thanks for applying','thank you for your application',
+    'thanks for your interest in','we received your application','your application has been received',
+    'application received','interview invitation','not moving forward','we have decided not to',
+    'after careful review','after careful consideration','your resume has been submitted',
+    'congratulations, your application','thank you for your interest in the'];
+  const isJobKeyword = jobKeywords.some(k => combined.includes(k));
+  const isJobSubject = /thank you for applying|thanks for applying|your application to|application for the|interview invitation/i.test(subjRaw);
+
+  if (!isJobSender && !isJobKeyword && !isJobSubject) return null;
+
+  // status detection
+  let status = 'applied';
+  const interviewSignals = ['interview invitation','interview request','schedule an interview',
+    'move forward with an interview','pleased to invite','happy to move forward',
+    'like to move forward','like to invite you','we would like to speak',
+    'next step in the process','advance to the next'];
+  const rejectionSignals = ['not moving forward','not selected','we regret to','decided not to',
+    'will not be mov','chosen to pursue other','not move forward','unfortunately, we',
+    'position has been filled','not the right fit','after careful review, we have decided',
+    'after careful consideration, we will not','we have decided not to move',
+    'after thoughtful review','chosen not to move','will not be proceeding',
+    'not a match for','we will not be moving','not progress your application',
+    'we are unable to move','will not be moving forward'];
+
+  if (interviewSignals.some(s => combined.includes(s))) {
+    status = 'interview';
+  } else if (rejectionSignals.some(s => combined.includes(s))) {
+    status = 'rejected';
+  }
+
+  // --- COMPANY EXTRACTION ---
+  let company = '';
+
+  // Priority 1: greenhouse "Thank you for applying to COMPANY[!]"
+  const ghMatch = subjRaw.match(/(?:thank you for applying to|thanks for applying to|thank you for your interest in|thanks for your interest in|your application to)\s+(.+?)(?:\s*[!]|$)/i);
+  if (ghMatch) {
+    company = ghMatch[1].trim();
+    // strip pipe and role if present e.g. "GoHenry | Risk Management Analyst"
+    company = company.replace(/\s*\|.*$/, '').trim();
+  }
+
+  // Priority 2: clean sender name (ashby, lever, custom senders)
+  if (!company) {
+    const cleaned = fromName
+      .replace(/\b(?:Talent Acquisition|Hiring Team|Recruiting Team|Recruiter|Careers|HR Team|HR|Team|Support|@\s*icims|via LinkedIn|WorkdayNoReply|NoReply)\b/gi, '')
+      .replace(/(?:no-?reply|do-?not-?reply)@\S+/gi, '')
+      .replace(/@\S+/g, '')  // strip email addresses
+      .replace(/\./g, ' ')
+      .trim();
+    // only use if it looks like a real company name (not an email address fragment)
+    if (cleaned && cleaned.length > 1 && !cleaned.includes('@') && !/^\d+$/.test(cleaned)) {
+      company = cleaned;
+    }
+  }
+
+  // Priority 3: workday — extract from preview body
+  if (!company || company.length < 2 || company.toLowerCase().includes('workday') || company.toLowerCase().includes('myworkday')) {
+    const wdPreview = preview.match(/(?:applying (?:to|at|for)|opportunity (?:at|with)|interest in (?:working for |joining )?)\s+([A-Z][a-zA-Z\s&]{2,35}?)(?:\.|!|,|\s+we|\s+and|\s+our)/)
+      || preview.match(/(?:at|with|for)\s+([A-Z][a-zA-Z\s&]{2,30}?)(?:\.|!|,|\s+we\s|\s+and\s|\s+is\s)/)
+      || preview.match(/welcome to\s+([A-Z][a-zA-Z\s&]{2,30}?)(?:[!.,]|\s+we|\s+and)/);
+    if (wdPreview) company = wdPreview[1].trim();
+  }
+
+  // Priority 4: subject contains "at COMPANY"
+  if (!company || company.length < 2) {
+    const atMatch = subjRaw.match(/\bat\s+([A-Z][a-zA-Z0-9\s&.,]{2,35}?)(?:\s*[-!|]|$)/);
+    if (atMatch) company = atMatch[1].trim();
+  }
+
+  company = company.replace(/[!.,\s-]+$/, '').trim();
+  // reject if company looks like a job req number or long subject fragment
+  if (/\d{5,}/.test(company) || company.split(' ').length > 7) company = '';
+
+  // reject if company looks like a full sentence or subject line fragment
+  if (company.split(' ').length > 6 || company.toLowerCase().includes('position with') ||
+      company.toLowerCase().includes('the client') || company.toLowerCase().includes('analyst at') ||
+      company.includes('@') || /^\d/.test(company)) {
+    company = '';
+  }
+
+  // --- ROLE EXTRACTION ---
+  let role = '';
+
+  // Pattern A: pipe format "Company | Role Title"
+  const pipeMatch = subjRaw.match(/\|\s*(.+)$/);
+  if (pipeMatch) role = pipeMatch[1].trim();
+
+  // Pattern B: workday subject "ROLE Application Update/Received"
+  if (!role) {
+    const wdSubj = subjRaw.match(/^(.+?)\s+[Aa]pplication\s+(?:Update|Received|Submitted)/i);
+    if (wdSubj) role = wdSubj[1].replace(/^(the |a |an )/i,'').trim();
+  }
+
+  // Pattern C: "application for the ROLE" or "applying for the ROLE"
+  if (!role) {
+    const forRole = subjRaw.match(/(?:application for the|applying for the|applying for a)\s+([^-!\n|.]+?)(?:\s+(?:at|with)\s+[A-Z]|\s*[-!|]|$)/i);
+    if (forRole) role = forRole[1].replace(/^(the |a |an )/i,'').trim();
+  }
+
+  // Pattern D: from preview — "applying for the ROLE" or "position of ROLE"
+  if (!role) {
+    const previewRole = preview.match(/(?:applying for the |for the |position of |role of )([a-z][^.!,\n]{4,55}?)(?:\s+(?:at|with)\s|\.|,|!|\s+we\s|\s+and\s)/i);
+    if (previewRole) {
+      const candidate = previewRole[1].replace(/^(the |a |an )/i,'').trim();
+      // reject garbage phrases
+      const garbage = ['time','meantime','your time','effort','interest','application','opportunity','position we will'];
+      if (!garbage.some(g => candidate.toLowerCase().startsWith(g))) {
+        role = candidate;
+      }
+    }
+  }
+
+  // clean role
+  role = role.replace(/\s+(?:to|at|with)\s+[A-Z].*/i, '').trim();
+  role = role.replace(/\s+(?:role|position|opportunity)\.?$/i, '').trim();
+  role = role.replace(/^(?:position of|role of|position|the )\s*/i, '').trim();
+  role = role.replace(/^\d+[A-Z]+[,\s]+/i, '').trim();
+  role = role.replace(/\s*-\s*\d{7,}.*$/, '').trim();
+  role = role.replace(/[!.,]+$/,'').trim();
+  const garbageRoles = ['time','meantime','your time','effort','button below','response','confirmation number','hr team','atlas team','affirm team','position we will contact','time and effort','position'];
+  if (garbageRoles.some(g => role.toLowerCase() === g.toLowerCase())) role = '';
+  if (company && role.toLowerCase() === company.toLowerCase()) role = '';
+  if (role.length > 65) role = role.substring(0, 62) + '…';
+  const garbageCompanies = ['donotreply','do not reply','noreply','workdaynoreply','terminix','pnc','mtb','humana','adp','myworkday','workday','human resources','hr department'];
+  if (garbageCompanies.some(g => company.toLowerCase() === g.toLowerCase())) company = '';
+  const date = new Date(email.receivedDateTime);
+  const dateStr = date.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+  let notes = '';
+  if (status === 'interview') notes = 'Interview invite received';
+  else if (status === 'rejected') notes = 'Not moving forward';
+  else if (combined.includes('high volume') || combined.includes('many applicants')) notes = 'High applicant volume';
+  else if (combined.includes('passed') && combined.includes('review')) notes = 'Passed initial review';
+  else notes = 'Under review';
+  return { company: company || '—', role: role || '—', date: dateStr, rawDate: email.receivedDateTime, status, notes, id: email.id };
+}
+
+async function loadData() {
+  const btn = document.querySelector('.refresh-btn');
+  btn.classList.add('loading');
+  btn.textContent = '↻ Loading...';
+  document.getElementById('error-banner').style.display = 'none';
+
+  try {
+    const resp = await fetch(`${SERVER}/emails/jobs?after=2026-01-01T00:00:00Z&top=200`);
+    if (!resp.ok) throw new Error('Server error');
+    const data = await resp.json();
+
+    const emails = data.value || [];
+    const classified = emails.map(classifyEmail).filter(Boolean);
+    const withOverrides = applyOverrides(classified);
+
+    const seen = new Set();
+    allApps = withOverrides.filter(a => {
+      const key = (a.company + '|' + a.role).toLowerCase().substring(0, 60) + '|' + a.date;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    allApps.sort((a,b) => new Date(b.rawDate) - new Date(a.rawDate));
+
+    updateStats();
+    updateChart();
+    updateActivity();
+    renderTable();
+
+    const now = new Date();
+    document.getElementById('last-updated').textContent = `Updated ${now.toLocaleTimeString()}`;
+  } catch(e) {
+    document.getElementById('error-banner').style.display = 'block';
+    document.getElementById('last-updated').textContent = 'Connection failed';
+  }
+
+  btn.classList.remove('loading');
+  btn.textContent = '↻ Refresh';
+}
+
+function updateStats() {
+  const total = allApps.length;
+  const interviews = allApps.filter(a=>a.status==='interview').length;
+  const rejected = allApps.filter(a=>a.status==='rejected').length;
+  const pending = allApps.filter(a=>a.status==='applied'||a.status==='pending').length;
+
+  document.getElementById('s-total').textContent = total;
+  document.getElementById('s-interviews').textContent = interviews;
+  document.getElementById('s-rejected').textContent = rejected;
+  document.getElementById('s-pending').textContent = pending;
+
+  const rate = total > 0 ? Math.round((interviews/total)*100) : 0;
+  const rRate = total > 0 ? Math.round((rejected/total)*100) : 0;
+  document.getElementById('s-interview-rate').textContent = `${rate}% response rate`;
+  document.getElementById('s-reject-rate').textContent = `${rRate}% of applications`;
+}
+
+function updateChart() {
+  const applied = allApps.filter(a=>a.status==='applied').length;
+  const interview = allApps.filter(a=>a.status==='interview').length;
+  const rejected = allApps.filter(a=>a.status==='rejected').length;
+  const pending = allApps.filter(a=>a.status==='pending').length;
+
+  const colors = ['#60a0f0','#3ecf8e','#f06060','#f0b060'];
+  const labels = ['Applied','Interview','Rejected','Pending'];
+  const values = [applied, interview, rejected, pending];
+
+  if (donutChart) donutChart.destroy();
+  const ctx = document.getElementById('donut').getContext('2d');
+  donutChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{ data: values, backgroundColor: colors.map(c=>c+'33'), borderColor: colors, borderWidth: 2, hoverOffset: 4 }]
+    },
+    options: {
+      cutout: '72%',
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw}` } } },
+      animation: { animateRotate: true, duration: 800 }
+    }
+  });
+
+  const legend = document.getElementById('chart-legend');
+  legend.innerHTML = labels.map((l,i) => `
+    <div class="legend-item">
+      <div class="legend-dot" style="background:${colors[i]}"></div>
+      <span style="color:var(--muted)">${l}</span>
+      <span style="margin-left:auto;font-weight:500;color:${colors[i]}">${values[i]}</span>
+    </div>
+  `).join('');
+}
+
+function updateActivity() {
+  const recent = allApps.slice(0, 10);
+  const colorMap = { applied:'var(--blue)', interview:'var(--green)', rejected:'var(--red)', pending:'var(--amber)' };
+  const list = document.getElementById('activity-list');
+
+  if (!recent.length) { list.innerHTML = '<div class="empty">No recent activity</div>'; return; }
+
+  list.innerHTML = recent.map(a => `
+    <div class="activity-item">
+      <div class="activity-dot" style="background:${colorMap[a.status]}"></div>
+      <div>
+        <div class="activity-text"><span class="co">${a.company}</span> · ${a.role.substring(0,35)}${a.role.length>35?'...':''}</div>
+        <div class="activity-time">${a.date} · ${a.status}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTable();
+}
+
+function renderTable() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const filtered = allApps.filter(a => {
+    const matchFilter = currentFilter === 'all' || a.status === currentFilter;
+    const matchSearch = !q || a.company.toLowerCase().includes(q) || a.role.toLowerCase().includes(q);
+    return matchFilter && matchSearch;
+  });
+
+  const badgeMap = {
+    applied: '<span class="badge badge-applied">Applied</span>',
+    interview: '<span class="badge badge-interview">Interview</span>',
+    rejected: '<span class="badge badge-rejected">Rejected</span>',
+    pending: '<span class="badge badge-pending">Pending</span>'
+  };
+
+  const tbody = document.getElementById('tbody');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">No applications match this filter.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(a => `
+    <tr class="editable" onclick="openEdit('${a.id}')" title="Click to edit">
+      <td class="company-cell">${a.company}</td>
+      <td class="role-cell">${a.role}</td>
+      <td class="date-cell">${a.date}</td>
+      <td>${badgeMap[a.status]}</td>
+      <td class="notes-cell">${a.notes || '—'}</td>
+    </tr>
+  `).join('');
+}
+
+
+
+// --- SYNC REJECTIONS ---
+const REJECTION_SIGNALS = [
+  'not moving forward','will not be moving forward','after careful consideration, we will not',
+  'after careful review, we have decided','we have decided not to move forward',
+  'chosen to pursue other candidates','decided to move forward with other',
+  'not selected for','position has been filled','position has now been filled',
+  'unfortunately we will not','after thoughtful review','not be proceeding',
+  'unable to move forward','we will not be proceeding','chosen not to move forward'
+];
+
+function extractCompanyFromEmail(email) {
+  const subj = (email.subject || '').toLowerCase();
+  const preview = (email.bodyPreview || '').toLowerCase();
+  const fromName = (email.from?.emailAddress?.name || '');
+  
+  // clean sender name
+  let company = fromName
+    .replace(/\b(?:Talent Acquisition|Hiring Team|Recruiting Team|Careers|HR Team|HR|Team|Support|Workday|NoReply)\b/gi, '')
+    .replace(/@\S+/g, '').replace(/\.com/gi, '').trim();
+  
+  // greenhouse pattern
+  const ghMatch = (email.subject || '').match(/(?:thank you for applying to|thanks for applying to|your application to)\s+(.+?)(?:\s*[!|]|$)/i);
+  if (ghMatch) company = ghMatch[1].trim().replace(/[!.,]+$/, '');
+  
+  // known companies from workday addresses
+  const addrMap = {
+    'zillow': 'Zillow', 'mtb': 'M&T Bank', 'pnc': 'PNC',
+    'humana': 'Humana', 'labcorp': 'Labcorp', 'coinbase': 'Coinbase',
+    'appfolio': 'AppFolio', 'customersbank': 'Customers Bank',
+    'achievecareers': 'Achieve', 'lplfinancial': 'LPL Financial',
+    'icon': 'ICON', 'termini': 'Terminix'
+  };
+  const addr = (email.from?.emailAddress?.address || '').toLowerCase();
+  for (const [key, val] of Object.entries(addrMap)) {
+    if (addr.includes(key)) { company = val; break; }
+  }
+  
+  return company || '—';
+}
+
+async function syncRejections() {
+  const btn = document.getElementById('sync-btn');
+  const banner = document.getElementById('sync-banner');
+  btn.textContent = '⚡ Scanning...';
+  btn.style.opacity = '0.5';
+  btn.disabled = true;
+  banner.style.display = 'none';
+
+  try {
+    const resp = await fetch(`${SERVER}/emails/rejections`);
+    if (!resp.ok) throw new Error('Server error');
+    const data = await resp.json();
+    const emails = data.value || [];
+    
+    let updated = 0;
+    let newFound = 0;
+
+    for (const email of emails) {
+      const preview = (email.bodyPreview || '').toLowerCase();
+      const combined = (email.subject || '').toLowerCase() + ' ' + preview;
+      
+      // confirm it's actually a rejection
+      if (!REJECTION_SIGNALS.some(s => combined.includes(s))) continue;
+      
+      const emailId = email.id;
+      const company = extractCompanyFromEmail(email);
+      const date = new Date(email.receivedDateTime);
+      const dateStr = date.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+
+      // try to match existing app by company name or email id
+      const existingIdx = allApps.findIndex(a => 
+        a.id === emailId || 
+        (company !== '—' && a.company.toLowerCase() === company.toLowerCase())
+      );
+
+      if (existingIdx >= 0) {
+        if (allApps[existingIdx].status !== 'rejected') {
+          allApps[existingIdx].status = 'rejected';
+          allApps[existingIdx].notes = 'Not moving forward';
+          overrides[allApps[existingIdx].id] = { 
+            ...overrides[allApps[existingIdx].id],
+            status: 'rejected', 
+            notes: 'Not moving forward' 
+          };
+          updated++;
+        }
+      } else {
+        // add as new entry if not in list at all
+        if (!overrides[emailId]) {
+          allApps.push({
+            id: emailId,
+            company,
+            role: '—',
+            date: dateStr,
+            rawDate: email.receivedDateTime,
+            status: 'rejected',
+            notes: 'Not moving forward'
+          });
+          overrides[emailId] = { company, status: 'rejected', notes: 'Not moving forward' };
+          newFound++;
+        }
+      }
+    }
+
+    saveOverrides();
+    allApps.sort((a,b) => new Date(b.rawDate) - new Date(a.rawDate));
+    updateStats();
+    updateChart();
+    updateActivity();
+    renderTable();
+
+    banner.style.display = 'block';
+    banner.textContent = `✓ Sync complete — ${updated} updated to rejected, ${newFound} new rejections found`;
+    setTimeout(() => { banner.style.display = 'none'; }, 6000);
+
+  } catch(e) {
+    banner.style.display = 'block';
+    banner.style.background = 'rgba(240,96,96,0.1)';
+    banner.style.borderColor = 'rgba(240,96,96,0.3)';
+    banner.style.color = 'var(--red)';
+    banner.textContent = 'Sync failed — make sure your server is running';
+    setTimeout(() => { banner.style.display = 'none'; }, 4000);
+  }
+
+  btn.textContent = '⚡ Sync Rejections';
+  btn.style.opacity = '1';
+  btn.disabled = false;
+}
+
+// --- EDIT & AUTO-FETCH SYSTEM ---
+let editingId = null;
+let overrides = {};
+
+// load saved overrides from localStorage
+try { overrides = JSON.parse(localStorage.getItem('job-overrides') || '{}'); } catch(e) {}
+
+function saveOverrides() {
+  try { localStorage.setItem('job-overrides', JSON.stringify(overrides)); } catch(e) {}
+}
+
+function applyOverrides(apps) {
+  return apps.map(a => {
+    if (overrides[a.id]) return { ...a, ...overrides[a.id] };
+    return a;
+  });
+}
+
+function openEdit(id) {
+  const app = allApps.find(a => a.id === id);
+  if (!app) return;
+  editingId = id;
+  document.getElementById('edit-company').value = app.company === '—' ? '' : app.company;
+  document.getElementById('edit-role').value = app.role === '—' ? '' : app.role;
+  document.getElementById('edit-status').value = app.status;
+  document.getElementById('edit-notes').value = app.notes || '';
+  document.getElementById('fetch-btn').textContent = '↓ Auto-fill from email';
+  document.getElementById('fetch-btn').disabled = false;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal(e) {
+  if (!e || e.target === document.getElementById('modal-overlay')) {
+    document.getElementById('modal-overlay').classList.remove('open');
+    editingId = null;
+  }
+}
+
+function saveEdit() {
+  if (!editingId) return;
+  const company = document.getElementById('edit-company').value.trim() || '—';
+  const role = document.getElementById('edit-role').value.trim() || '—';
+  const status = document.getElementById('edit-status').value;
+  const notes = document.getElementById('edit-notes').value.trim();
+  overrides[editingId] = { company, role, status, notes };
+  saveOverrides();
+  // apply to allApps in memory
+  const idx = allApps.findIndex(a => a.id === editingId);
+  if (idx >= 0) allApps[idx] = { ...allApps[idx], company, role, status, notes };
+  updateStats();
+  updateChart();
+  updateActivity();
+  renderTable();
+  document.getElementById('modal-overlay').classList.remove('open');
+  editingId = null;
+}
+
+async function fetchFromEmail() {
+  if (!editingId) return;
+  const btn = document.getElementById('fetch-btn');
+  btn.textContent = 'Fetching...';
+  btn.disabled = true;
+  try {
+    const resp = await fetch(`${SERVER}/emails/batch-details?ids=${editingId}`);
+    const data = await resp.json();
+    const msg = data.value?.[0];
+    if (msg) {
+      // strip HTML tags from body
+      const bodyText = (msg.body?.content || msg.bodyPreview || '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .toLowerCase();
+      const subj = (msg.subject || '').toLowerCase();
+
+      // try to extract company
+      const compMatch = subj.match(/(?:thank you for applying to|thanks for applying to|your application to|applying to)\s+([^!.\n|]+)/i)
+        || bodyText.match(/(?:applying (?:to|at|for)|joining )([A-Z][a-zA-Z\s&]{2,30}?)(?:\.|,|!|\s+we|\s+our)/);
+      if (compMatch) document.getElementById('edit-company').value = compMatch[1].trim().replace(/[!.,]+$/,'');
+
+      // try to extract role
+      const roleMatch = subj.match(/\|\s*(.+)$/)
+        || bodyText.match(/(?:applying for the |position of |role of |the )([a-z][^.!,\n]{4,55}?)(?:\s+(?:at|with)\s|\.|,|!)/i);
+      if (roleMatch) {
+        let r = roleMatch[1].replace(/^(the |a |an )/i,'').trim().replace(/\s+(role|position|opportunity)\.?$/i,'').trim();
+        document.getElementById('edit-role').value = r;
+      }
+
+      btn.textContent = '✓ Done';
+    } else {
+      btn.textContent = 'No data found';
+    }
+  } catch(e) {
+    btn.textContent = 'Error — try manually';
+  }
+  setTimeout(() => { btn.textContent = '↓ Auto-fill from email'; btn.disabled = false; }, 2000);
+}
+
+loadData();
+setInterval(loadData, 5 * 60 * 1000);
+</script>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title">Edit Application</div>
+    <div class="field">
+      <label>Company</label>
+      <input type="text" id="edit-company" placeholder="Company name">
+    </div>
+    <div class="field">
+      <label>Role</label>
+      <input type="text" id="edit-role" placeholder="Job title">
+      <button class="btn-fetch" id="fetch-btn" onclick="fetchFromEmail()">↓ Auto-fill from email</button>
+    </div>
+    <div class="field">
+      <label>Status</label>
+      <select id="edit-status">
+        <option value="applied">Applied</option>
+        <option value="interview">Interview</option>
+        <option value="rejected">Rejected</option>
+        <option value="pending">Pending</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <input type="text" id="edit-notes" placeholder="Any notes...">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-save" onclick="saveEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
