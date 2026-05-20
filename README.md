@@ -1,5 +1,9 @@
 # Outlook Job Search Tracker
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-3DA639?style=for-the-badge)](LICENSE)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ryancreates-FFD000?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/ryancreates)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Gelassoldat-FF5E5B?style=for-the-badge&logo=kofi&logoColor=white)](https://ko-fi.com/gelassoldat)
+
 A live job application dashboard built on top of Microsoft Graph API. It connects to a personal Outlook inbox, automatically pulls and classifies job application emails, and displays them in a real-time web dashboard with search, filtering, and manual override capabilities.
 
 Built with Python, Flask, and vanilla HTML/JS. Integrated with Claude Desktop as a local MCP server.
@@ -172,6 +176,13 @@ Restart Claude Desktop. You should see the hammer icon indicating MCP tools are 
 The built-in Microsoft 365 connector in Anthropic's MCP library only supports work and school accounts. Personal Outlook/Live accounts are not supported through that integration. This project exists because of that gap — building a custom connector was the only way to make it work with a personal account.
 
 ---
+
+## Support
+
+If this project helped you, consider buying me a coffee.
+
+- Ko-fi: https://ko-fi.com/gelassoldat
+- Buy Me a Coffee: https://buymeacoffee.com/ryancreates
 
 ## Author
 
