@@ -55,6 +55,8 @@ def check_api_key():
     return provided == api_key
 
 def index():
+    @app.route('/')
+def index():
     token = get_token()
     if token:
         return jsonify({'status': 'authenticated', 'message': 'MCP server is running'})
