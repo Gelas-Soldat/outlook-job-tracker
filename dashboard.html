@@ -381,12 +381,12 @@
 
 <script>
 const SERVER = 'https://outlook-job-tracker.onrender.com';
-const API_KEY = ''; 'ff8e7549ba76924300e7ebe59597e5eadc27b5d111ef6fa5828b70a415dd7e98';'
+const API_KEY = 'ff8e7549ba76924300e7ebe59597e5eadc27b5d111ef6fa5828b70a415dd7e98';
 
 function apiFetch(url, options = {}) {
   const headers = { ...options.headers };
   if (API_KEY) headers['X-API-Key'] = API_KEY;
-  return apiFetch(url, { ...options, headers });
+  return fetch(url, { ...options, headers });
 }
 let allApps = [];
 let currentFilter = 'all';
