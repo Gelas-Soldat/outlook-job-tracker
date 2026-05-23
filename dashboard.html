@@ -299,7 +299,7 @@
 
   <div id="sync-banner" style="display:none;background:rgba(62,207,142,0.1);border:1px solid rgba(62,207,142,0.3);border-radius:8px;padding:12px 16px;font-size:12px;color:var(--green);margin-bottom:1rem;"></div>
   <div class="error-banner" id="error-banner">
-    Could not connect to local server at <strong>http://localhost:8080</strong>. Make sure your Python server is running.
+    Could not connect to server at <strong>https://outlook-job-tracker.onrender.com</strong>. The server may be starting up — try again in 30 seconds.
   </div>
 
   <div class="stats">
@@ -374,13 +374,20 @@
   </div>
 
   <div style="margin-top:1rem;font-size:10px;color:var(--muted);text-align:center;">
-    Powered by local MCP server · localhost:8080 · Auto-refreshes every 5 minutes
+    Powered by Render · outlook-job-tracker.onrender.com · Auto-refreshes every 5 minutes
   </div>
 
 </div>
 
 <script>
-const SERVER = 'http://localhost:8080';
+const SERVER = 'https://outlook-job-tracker.onrender.com';
+const API_KEY = ''; 'ff8e7549ba76924300e7ebe59597e5eadc27b5d111ef6fa5828b70a415dd7e98';'
+
+function apiFetch(url, options = {}) {
+  const headers = { ...options.headers };
+  if (API_KEY) headers['X-API-Key'] = API_KEY;
+  return apiFetch(url, { ...options, headers });
+}
 let allApps = [];
 let currentFilter = 'all';
 let donutChart = null;
@@ -562,7 +569,7 @@ async function loadData() {
   document.getElementById('error-banner').style.display = 'none';
 
   try {
-    const resp = await fetch(`${SERVER}/emails/jobs?after=2026-01-01T00:00:00Z&top=200`);
+    const resp = await apiFetch(`${SERVER}/emails/jobs?after=2026-01-01T00:00:00Z&top=200`);
     if (!resp.ok) throw new Error('Server error');
     const data = await resp.json();
 
@@ -756,7 +763,7 @@ async function syncRejections() {
   banner.style.display = 'none';
 
   try {
-    const resp = await fetch(`${SERVER}/emails/rejections`);
+    const resp = await apiFetch(`${SERVER}/emails/rejections`);
     if (!resp.ok) throw new Error('Server error');
     const data = await resp.json();
     const emails = data.value || [];
@@ -899,7 +906,7 @@ async function fetchFromEmail() {
   btn.textContent = 'Fetching...';
   btn.disabled = true;
   try {
-    const resp = await fetch(`${SERVER}/emails/batch-details?ids=${editingId}`);
+    const resp = await apiFetch(`${SERVER}/emails/batch-details?ids=${editingId}`);
     const data = await resp.json();
     const msg = data.value?.[0];
     if (msg) {
