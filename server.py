@@ -46,6 +46,14 @@ def get_token():
     return None
 
 @app.route('/')
+
+def check_api_key():
+    api_key = os.getenv('API_KEY', '')
+    if not api_key:
+        return True
+    provided = request.headers.get('X-API-Key') or request.args.get('api_key')
+    return provided == api_key
+
 def index():
     token = get_token()
     if token:
@@ -74,6 +82,7 @@ def callback():
 
 @app.route('/emails/jobs')
 def job_emails():
+    if not check_api_key(): return jsonify({'error': 'Unauthorized'}), 401
     token = get_token()
     if not token:
         return jsonify({'error': 'Not authenticated'}), 401
@@ -106,6 +115,7 @@ def job_emails():
 
 @app.route('/emails/rejections')
 def rejection_emails():
+    if not check_api_key(): return jsonify({'error': 'Unauthorized'}), 401
     token = get_token()
     if not token:
         return jsonify({'error': 'Not authenticated'}), 401
@@ -137,6 +147,7 @@ def rejection_emails():
 
 @app.route('/emails/search')
 def search_emails():
+    if not check_api_key(): return jsonify({'error': 'Unauthorized'}), 401
     token = get_token()
     if not token:
         return jsonify({'error': 'Not authenticated'}), 401
@@ -149,6 +160,7 @@ def search_emails():
 
 @app.route('/emails/recent')
 def recent_emails():
+    if not check_api_key(): return jsonify({'error': 'Unauthorized'}), 401
     token = get_token()
     if not token:
         return jsonify({'error': 'Not authenticated'}), 401
@@ -160,6 +172,7 @@ def recent_emails():
 
 @app.route('/emails/read/<message_id>')
 def read_email(message_id):
+    if not check_api_key(): return jsonify({'error': 'Unauthorized'}), 401
     token = get_token()
     if not token:
         return jsonify({'error': 'Not authenticated'}), 401
@@ -170,6 +183,7 @@ def read_email(message_id):
 
 @app.route('/emails/batch-details')
 def batch_details():
+    if not check_api_key(): return jsonify({'error': 'Unauthorized'}), 401
     token = get_token()
     if not token:
         return jsonify({'error': 'Not authenticated'}), 401
@@ -186,6 +200,7 @@ def batch_details():
 
 @app.route('/calendar/events')
 def calendar_events():
+    if not check_api_key(): return jsonify({'error': 'Unauthorized'}), 401
     token = get_token()
     if not token:
         return jsonify({'error': 'Not authenticated'}), 401
@@ -196,3 +211,4 @@ def calendar_events():
 
 if __name__ == '__main__':
     app.run(port=8080, debug=True)
+
