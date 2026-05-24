@@ -548,7 +548,8 @@ function classifyEmail(email) {
   const interviewSignals = ['interview invitation','interview request','schedule an interview',
     'move forward with an interview','pleased to invite','happy to move forward',
     'like to move forward','like to invite you','we would like to speak',
-    'next step in the process','advance to the next'];
+    'next step in the process','advance to the next','phone interview',
+    'schedule a call','would like to connect','set up a time to chat'];
   const rejectionSignals = ['not moving forward','not selected','we regret to','decided not to',
     'will not be mov','chosen to pursue other','not move forward','unfortunately, we',
     'position has been filled','not the right fit','after careful review, we have decided',
@@ -694,7 +695,7 @@ if (liMatch) {
   // Fix UnitedHealth
   if (fromAddr.includes('recruiting.uhg.com')) company = 'UnitedHealth Group';
   // Fix SHAZAM
-  if (fromAddr.includes('shazam.net') || fromAddr.includes('shazam.hr')) company = 'SHAZAM';
+  if (fromAddr.includes('shazam.net') || fromAddr.includes('shazam.hr') || (fromAddr.includes('adp.com') && combined.includes('shazam'))) company = 'SHAZAM';
   const date = new Date(email.receivedDateTime);
   const dateStr = date.toLocaleDateString('en-US', { month:'short', day:'numeric' });
   let notes = '';
