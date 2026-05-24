@@ -1,4 +1,4 @@
-import os, requests
+import os, requests, json
 from flask import Flask, request, jsonify, redirect
 from flask_cors import CORS
 from msal import ConfidentialClientApplication, SerializableTokenCache
@@ -7,26 +7,61 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, origins=['https://outlook-job-tracker.netlify.app', 'http://localhost:3000', 'null'])
+CORS(app, origins=[
+    'https://outlook-job-tracker.netlify.app',
+    'http://localhost:3000',
+    'http://127.0.0.1:8080',
+    'null'
+])
 
 CLIENT_ID = os.getenv('CLIENT_ID')
 CLIENT_SECRET = os.getenv('CLIENT_SECRET')
 TENANT_ID = os.getenv('TENANT_ID', 'consumers')
 REDIRECT_URI = os.getenv('REDIRECT_URI', 'http://localhost:8080/callback')
 API_KEY = os.getenv('API_KEY', '')
+RENDER_API_KEY = os.getenv('RENDER_API_KEY', '')
+RENDER_SERVICE_ID = os.getenv('RENDER_SERVICE_ID', '')
 SCOPES = ['Mail.Read', 'Calendars.Read', 'User.Read']
 AUTHORITY = f'https://login.microsoftonline.com/{TENANT_ID}'
 CACHE_FILE = 'token_cache.json'
 
 def load_cache():
     cache = SerializableTokenCache()
+    # Try env var first (cloud), then file (local)
+    token_data = os.getenv('TOKEN_CACHE', '')
+    if token_data:
+        try:
+            cache.deserialize(token_data)
+            return cache
+        except:
+            pass
     if os.path.exists(CACHE_FILE):
         cache.deserialize(open(CACHE_FILE).read())
     return cache
 
 def save_cache(cache):
-    if cache.has_state_changed:
-        open(CACHE_FILE, 'w').write(cache.serialize())
+    if not cache.has_state_changed:
+        return
+    serialized = cache.serialize()
+    # Save to file always
+    try:
+        open(CACHE_FILE, 'w').write(serialized)
+    except:
+        pass
+    # Save to Render env var if credentials available
+    if RENDER_API_KEY and RENDER_SERVICE_ID:
+        try:
+            requests.put(
+                f'https://api.render.com/v1/services/{RENDER_SERVICE_ID}/env-vars',
+                headers={
+                    'Authorization': f'Bearer {RENDER_API_KEY}',
+                    'Content-Type': 'application/json'
+                },
+                json=[{'key': 'TOKEN_CACHE', 'value': serialized}],
+                timeout=10
+            )
+        except Exception as e:
+            print(f'Could not save token to Render: {e}')
 
 def get_msal_app(cache=None):
     return ConfidentialClientApplication(
@@ -76,7 +111,7 @@ def callback():
     result = msal_app.acquire_token_by_authorization_code(code, scopes=SCOPES, redirect_uri=REDIRECT_URI)
     save_cache(cache)
     if 'access_token' in result:
-        return jsonify({'status': 'success', 'message': 'Authenticated! Token saved.'})
+        return jsonify({'status': 'success', 'message': 'Authenticated! Token saved to Render environment.'})
     return jsonify({'error': result.get('error_description', 'Unknown error')}), 400
 
 @app.route('/emails/jobs')
@@ -85,7 +120,7 @@ def job_emails():
         return jsonify({'error': 'Unauthorized'}), 401
     token = get_token()
     if not token:
-        return jsonify({'error': 'Not authenticated'}), 401
+        return jsonify({'error': 'Not authenticated. Visit /login'}), 401
     after = request.args.get('after', '2026-01-01T00:00:00Z')
     keywords = ['thank you for applying', 'thanks for applying', 'your application',
                 'application received', 'interview invitation', 'application update',
