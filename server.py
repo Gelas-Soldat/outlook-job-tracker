@@ -51,7 +51,7 @@ def save_cache(cache):
     # Save to Render env var if credentials available
     if RENDER_API_KEY and RENDER_SERVICE_ID:
         try:
-            requests.put(
+            requests.post(
                 f'https://api.render.com/v1/services/{RENDER_SERVICE_ID}/env-vars',
                 headers={
                     'Authorization': f'Bearer {RENDER_API_KEY}',
