@@ -460,6 +460,10 @@
 <script>
 const SERVER = 'https://outlook-job-tracker.onrender.com';
 
+function getAnthropicKey() {
+  return localStorage.getItem('anthropic-api-key') || '';
+}
+
 function getApiKey() {
   return localStorage.getItem('dashboard-api-key') || '';
 }
@@ -482,6 +486,8 @@ function saveApiKey() {
   const key = document.getElementById('api-key-input').value.trim();
   if (!key) return;
   localStorage.setItem('dashboard-api-key', key);
+  const anthropicKey = document.getElementById('anthropic-key-input').value.trim();
+  if (anthropicKey) localStorage.setItem('anthropic-api-key', anthropicKey);
   document.getElementById('api-key-overlay').style.display = 'none';
   loadData();
 }
@@ -548,8 +554,7 @@ function classifyEmail(email) {
   const interviewSignals = ['interview invitation','interview request','schedule an interview',
     'move forward with an interview','pleased to invite','happy to move forward',
     'like to move forward','like to invite you','we would like to speak',
-    'next step in the process','advance to the next','phone interview',
-    'schedule a call','would like to connect','set up a time to chat'];
+    'next step in the process','advance to the next'];
   const rejectionSignals = ['not moving forward','not selected','we regret to','decided not to',
     'will not be mov','chosen to pursue other','not move forward','unfortunately, we',
     'position has been filled','not the right fit','after careful review, we have decided',
@@ -572,11 +577,10 @@ function classifyEmail(email) {
 
   // Priority 1: LinkedIn pattern "Your application to ROLE at COMPANY"
   const liMatch = subjRaw.match(/^Your application to (.+?) at (.+?)$/i);
-let liRole = '';
-if (liMatch) {
-  liRole = liMatch[1].trim();
-  company = liMatch[2].trim();
-}
+  if (liMatch) {
+    role = liMatch[1].trim();
+    company = liMatch[2].trim();
+  }
 
   // Priority 1b: greenhouse "Thank you for applying to COMPANY[!]"
   if (!company) {
@@ -628,7 +632,6 @@ if (liMatch) {
 
   // --- ROLE EXTRACTION ---
   let role = '';
-  if (liRole) role = liRole;
 
   // Pattern A: pipe format "Company | Role Title"
   const pipeMatch = subjRaw.match(/\|\s*(.+)$/);
@@ -695,7 +698,7 @@ if (liMatch) {
   // Fix UnitedHealth
   if (fromAddr.includes('recruiting.uhg.com')) company = 'UnitedHealth Group';
   // Fix SHAZAM
-  if (fromAddr.includes('shazam.net') || fromAddr.includes('shazam.hr') || (fromAddr.includes('adp.com') && combined.includes('shazam'))) company = 'SHAZAM';
+  if (fromAddr.includes('shazam.net') || fromAddr.includes('shazam.hr')) company = 'SHAZAM';
   const date = new Date(email.receivedDateTime);
   const dateStr = date.toLocaleDateString('en-US', { month:'short', day:'numeric' });
   let notes = '';
@@ -705,6 +708,65 @@ if (liMatch) {
   else if (combined.includes('passed') && combined.includes('review')) notes = 'Passed initial review';
   else notes = 'Under review';
   return { company: company || '—', role: role || '—', date: dateStr, rawDate: email.receivedDateTime, status, notes, id: email.id };
+}
+
+
+async function classifyUnknownsWithAI(unknowns, emailMap) {
+  // Process in batches of 10 to avoid rate limits
+  const batchSize = 10;
+  for (let i = 0; i < unknowns.length; i += batchSize) {
+    const batch = unknowns.slice(i, i + batchSize);
+    await Promise.all(batch.map(async (app) => {
+      const email = emailMap[app.id];
+      if (!email) return;
+      try {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': getAnthropicKey(),
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true'
+          },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 150,
+            messages: [{
+              role: 'user',
+              content: `You are classifying a job application email. Return ONLY valid JSON with these exact keys: company (string), role (string), status (one of: applied/interview/rejected/pending).
+
+Subject: ${email.subject || ''}
+From name: ${email.from?.emailAddress?.name || ''}
+From address: ${email.from?.emailAddress?.address || ''}
+Preview: ${(email.bodyPreview || '').substring(0, 300)}
+
+Rules:
+- company: the hiring company name, not the ATS platform
+- role: the job title being applied for
+- status: applied=confirmation, interview=invite to interview, rejected=not moving forward, pending=unclear
+- If you cannot determine company or role, use empty string ""
+- Return only the JSON object, no other text`
+            }]
+          })
+        });
+        const data = await response.json();
+        const text = data.content?.[0]?.text || '';
+        const clean = text.replace(/```json|```/g, '').trim();
+        const parsed = JSON.parse(clean);
+        if (parsed.company && parsed.company !== '' && parsed.company !== '—') {
+          app.company = parsed.company;
+        }
+        if (parsed.role && parsed.role !== '' && parsed.role !== '—') {
+          app.role = parsed.role;
+        }
+        if (parsed.status && ['applied','interview','rejected','pending'].includes(parsed.status)) {
+          app.status = parsed.status;
+        }
+      } catch(e) {
+        // silently fail — keep existing values
+      }
+    }));
+  }
 }
 
 async function loadData() {
@@ -721,6 +783,15 @@ async function loadData() {
 
     const emails = data.value || [];
     const classified = emails.map(classifyEmail).filter(Boolean);
+    
+    // AI fallback: classify emails where company is still unknown
+    const unknowns = classified.filter(a => a.company === '—');
+    if (unknowns.length > 0) {
+      const emailMap = {};
+      emails.forEach(e => { emailMap[e.id] = e; });
+      await classifyUnknownsWithAI(unknowns, emailMap);
+    }
+    
     const withOverrides = applyOverrides(classified);
 
     const seen = new Set();
@@ -1097,6 +1168,7 @@ setInterval(loadData, 5 * 60 * 1000);
     <h2>Enter API Key</h2>
     <p>This dashboard connects to your private Outlook server. Enter your API key to continue. It will be saved on this device.</p>
     <input type="password" id="api-key-input" placeholder="Paste your API key here..." onkeydown="if(event.key==='Enter') saveApiKey()">
+    <input type="password" id="anthropic-key-input" placeholder="Anthropic API key (optional, for AI classification)..." onkeydown="if(event.key==='Enter') saveApiKey()">
     <button onclick="saveApiKey()">Connect Dashboard</button>
   </div>
 </div>
