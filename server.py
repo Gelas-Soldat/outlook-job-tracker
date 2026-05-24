@@ -51,15 +51,16 @@ def save_cache(cache):
     # Save to Render env var if credentials available
     if RENDER_API_KEY and RENDER_SERVICE_ID:
         try:
-            requests.post(
-                f'https://api.render.com/v1/services/{RENDER_SERVICE_ID}/env-vars',
+            resp = requests.put(
+                f'https://api.render.com/v1/services/{RENDER_SERVICE_ID}/env-vars/TOKEN_CACHE',
                 headers={
                     'Authorization': f'Bearer {RENDER_API_KEY}',
                     'Content-Type': 'application/json'
                 },
-                json=[{'key': 'TOKEN_CACHE', 'value': serialized}],
+                json={'value': serialized},
                 timeout=10
             )
+            print(f'Token cache saved to Render: {resp.status_code}')
         except Exception as e:
             print(f'Could not save token to Render: {e}')
 
