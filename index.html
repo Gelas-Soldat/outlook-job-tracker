@@ -508,8 +508,9 @@ function classifyEmail(email) {
   const skipSenders = ['capitalone','priceline','target','walmart','appsumo','coinbase',
     'okx.com','nextdoor','getflex','paypal','eset.com','risecredit','lendingclub',
     'jobright.ai','aiapply.co','myperfectresume','mg.myperfectresume','jobscan',
-    'theladders','linkedin.com','messages-noreply','updates-noreply','newsletters-noreply',
-    'jobalerts-noreply','jobs-noreply@linkedin','vanguardhr','costco','square.com'];
+    'theladders','messages-noreply@linkedin','updates-noreply@linkedin',
+    'newsletters-noreply@linkedin','jobalerts-noreply@linkedin',
+    'vanguardhr','costco','square.com'];
   if (skipSenders.some(s => fromAddr.includes(s))) return null;
 
   // skip non-application subjects
@@ -526,14 +527,18 @@ function classifyEmail(email) {
     'gem.com','schepmontjobs','careerscape','appfolio.com','doordash.com','workablemail',
     'dayforcehcm','adp.com','recruitment.americanexpress','lplfinancial','achievecareers',
     'cs-recruiters','candidates.workablemail','trm.brassring','talent.icims',
-    'opisgroup','hr.lplfinancial','schepmontjobs','nationaldebtrelief'];
+    'opisgroup','hr.lplfinancial','nationaldebtrelief','jobs-noreply@linkedin',
+    'ats.rippling.com','eu.greenhouse-mail','noreply.careers@nestle',
+    'recruiting.uhg.com','talentacquisition@shazam','rippling.com'];
   const isJobSender = jobSenders.some(s => fromAddr.includes(s));
 
   const jobKeywords = ['thank you for applying','thanks for applying','thank you for your application',
     'thanks for your interest in','we received your application','your application has been received',
     'application received','interview invitation','not moving forward','we have decided not to',
     'after careful review','after careful consideration','your resume has been submitted',
-    'congratulations, your application','thank you for your interest in the'];
+    'congratulations, your application','thank you for your interest in the',
+    'your application was successfully submitted','successfully submitting your application',
+    'application for the','we have received your application'];
   const isJobKeyword = jobKeywords.some(k => combined.includes(k));
   const isJobSubject = /thank you for applying|thanks for applying|your application to|application for the|interview invitation/i.test(subjRaw);
 
@@ -551,7 +556,10 @@ function classifyEmail(email) {
     'after careful consideration, we will not','we have decided not to move',
     'after thoughtful review','chosen not to move','will not be proceeding',
     'not a match for','we will not be moving','not progress your application',
-    'we are unable to move','will not be moving forward'];
+    'we are unable to move','will not be moving forward',
+    'job requirements weren','requirements weren't the right',
+    'we will not be moving forward with your application',
+    'decided to pause the position','not be moving forward with your candidacy'];
 
   if (interviewSignals.some(s => combined.includes(s))) {
     status = 'interview';
@@ -562,12 +570,20 @@ function classifyEmail(email) {
   // --- COMPANY EXTRACTION ---
   let company = '';
 
-  // Priority 1: greenhouse "Thank you for applying to COMPANY[!]"
-  const ghMatch = subjRaw.match(/(?:thank you for applying to|thanks for applying to|thank you for your interest in|thanks for your interest in|your application to)\s+(.+?)(?:\s*[!]|$)/i);
-  if (ghMatch) {
-    company = ghMatch[1].trim();
-    // strip pipe and role if present e.g. "GoHenry | Risk Management Analyst"
-    company = company.replace(/\s*\|.*$/, '').trim();
+  // Priority 1: LinkedIn pattern "Your application to ROLE at COMPANY"
+  const liMatch = subjRaw.match(/^Your application to (.+?) at (.+?)$/i);
+  if (liMatch) {
+    role = liMatch[1].trim();
+    company = liMatch[2].trim();
+  }
+
+  // Priority 1b: greenhouse "Thank you for applying to COMPANY[!]"
+  if (!company) {
+    const ghMatch = subjRaw.match(/(?:thank you for applying to|thanks for applying to|thank you for your interest in|thanks for your interest in|your application to)\s+(.+?)(?:\s*[!]|$)/i);
+    if (ghMatch) {
+      company = ghMatch[1].trim();
+      company = company.replace(/\s*\|.*$/, '').trim();
+    }
   }
 
   // Priority 2: clean sender name (ashby, lever, custom senders)
@@ -653,8 +669,31 @@ function classifyEmail(email) {
   if (garbageRoles.some(g => role.toLowerCase() === g.toLowerCase())) role = '';
   if (company && role.toLowerCase() === company.toLowerCase()) role = '';
   if (role.length > 65) role = role.substring(0, 62) + '…';
-  const garbageCompanies = ['donotreply','do not reply','noreply','workdaynoreply','terminix','pnc','mtb','humana','adp','myworkday','workday','human resources','hr department'];
+  const garbageCompanies = ['donotreply','do not reply','noreply','workdaynoreply','terminix','pnc','mtb','adp','myworkday','workday','human resources','hr department'];
   if (garbageCompanies.some(g => company.toLowerCase() === g.toLowerCase())) company = '';
+
+  // Fix known workday sender addresses to real company names
+  const workdayMap = {
+    'humana@myworkday': 'Humana',
+    'situsamc@myworkday': 'SitusAMC',
+    'pnc@myworkday': 'PNC',
+    'mtb@myworkday': 'M&T Bank',
+    'labcorp@myworkday': 'Labcorp',
+    'icon@myworkday': 'ICON',
+    'customersbank@myworkday': 'Customers Bank',
+  };
+  for (const [key, val] of Object.entries(workdayMap)) {
+    if (fromAddr.includes(key.toLowerCase())) { company = val; break; }
+  }
+
+  // Fix Nestlé sender
+  if (fromAddr.includes('nestle.com')) company = 'Nestlé';
+  // Fix Rippling ATS — company name is in the sender name
+  if (fromAddr.includes('ats.rippling.com') && fromName && !company) company = fromName;
+  // Fix UnitedHealth
+  if (fromAddr.includes('recruiting.uhg.com')) company = 'UnitedHealth Group';
+  // Fix SHAZAM
+  if (fromAddr.includes('shazam.net') || fromAddr.includes('shazam.hr')) company = 'SHAZAM';
   const date = new Date(email.receivedDateTime);
   const dateStr = date.toLocaleDateString('en-US', { month:'short', day:'numeric' });
   let notes = '';
