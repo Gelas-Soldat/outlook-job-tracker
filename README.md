@@ -10,56 +10,31 @@ Built with Python, Flask, and vanilla HTML/JS. Integrated with Claude Desktop as
 
 ---
 
-## For Hiring Managers
+## The Problem
 
-If you are reviewing this project as part of evaluating me for a business analyst or data analyst role, this section is written with you in mind.
+Job hunting at scale is a data problem most people don't treat like one.
 
-### The Problem
+When you're actively applying across LinkedIn, Greenhouse, Ashby, Workday, Lever, and iCIMS simultaneously, your inbox becomes the only source of truth — and it's unstructured, noisy, and nearly impossible to analyze manually. No clear response rate. No way to distinguish a rejection from silence. No pattern visibility.
 
-Job hunting at scale creates a data problem most people never think about. When you are actively applying to dozens of roles across multiple platforms — LinkedIn, Greenhouse, Ashby, Workday, Lever, iCIMS and more — your inbox becomes the only source of truth. But it is unstructured, noisy, and nearly impossible to analyze manually.
+I had over 100 applications in flight with no real picture of where any of them stood. So I built one.
 
-I was tracking over 100 applications with no clear picture of where each one stood. I did not know my actual response rate. I could not tell which companies had rejected me versus which were simply quiet. I had no way to spot patterns.
+## What It Does
 
-That is a data problem. And data problems have solutions.
+Rather than a spreadsheet, this is an end-to-end data pipeline:
 
-### The Use Case
+**Ingestion** — A Python/Flask server connects to Microsoft Graph API and queries the inbox across 14 job-related keyword searches, paginating through results to maximize coverage.
 
-What I needed was a pipeline that could:
+**Classification** — Each email runs through a multi-layered classifier that identifies the sender domain (Greenhouse, Ashby, Workday, Lever, iCIMS, etc.), extracts company name and role from subject line patterns, and detects status signals — applied, interview, rejected, pending — using keyword matching.
 
-- Ingest raw, unstructured email data from multiple sender formats
-- Classify each record into a meaningful status category
-- Surface actionable insights in a simple, readable interface
-- Update automatically as new data came in
-- Allow manual corrections where automated classification fell short
+**Data quality** — A manual override system lets users correct misclassified records. Overrides persist in browser localStorage across refreshes. A dedicated rejection sync scans for rejection language across 14 phrase variants and auto-updates matching records.
 
-This is exactly the kind of problem a business analyst or data analyst is asked to solve in a professional setting. The domain changes. The underlying challenge does not.
+**Delivery** — A live HTML dashboard with real-time filtering, search, status breakdown charts, and a recent activity feed. Auto-refreshes every 5 minutes. Hosted on Netlify, backend on Render.
 
-### The Solution
+**MCP integration** — The Flask server is wrapped as a local MCP server, connecting it to Claude Desktop so the AI assistant can query the inbox and surface insights conversationally.
 
-Rather than a spreadsheet or a manual log, I built an end-to-end data pipeline:
+## Why This Exists
 
-**Data ingestion:** A Python/Flask server connects to Microsoft Graph API and pulls emails matching job-related keywords across 14 search queries, paginating through results to maximize coverage.
-
-**Classification logic:** Each email is run through a multi-layered classifier that identifies the sender domain (Greenhouse, Ashby, Workday, Lever, etc.), extracts company name and role from subject line patterns, detects status signals (applied, interview, rejected, pending) using keyword matching, and filters out noise from non-job senders.
-
-**Data quality layer:** A manual override system lets users correct any misclassified record. Overrides persist in browser local storage and survive auto-refreshes. A dedicated rejection sync scans specifically for rejection language across 14 phrase variants and auto-updates matching records.
-
-**Delivery:** A live HTML dashboard presents the data with real-time filtering, search, status breakdown charts, and recent activity feed. It auto-refreshes every 5 minutes.
-
-**Integration:** The Flask server is also wrapped as a local MCP server, connecting it directly to Claude Desktop so the AI assistant can query the inbox, read emails, and surface insights conversationally.
-
-### Why It Matters for a BA/DA Role
-
-The skills demonstrated here map directly to what business and data analysts do day to day:
-
-- Identifying a real problem and defining requirements before building anything
-- Connecting to and querying an external data source via API
-- Designing classification logic to turn unstructured data into structured records
-- Building a feedback loop for data quality (the manual override and sync features)
-- Presenting findings in a clear, accessible format for a non-technical audience
-- Iterating based on what the data actually shows
-
-I did not write the code myself. I worked with Claude to build it, asking questions at every step and understanding the decisions being made. I am actively upskilling in Python and SQL. This project is part of that process.
+The built-in Microsoft 365 connector in Anthropic's MCP library only supports work and school accounts. Personal Outlook/Live accounts aren't supported. This project started as a workaround for that gap and grew from there.
 
 ---
 
@@ -77,7 +52,7 @@ Microsoft Graph API
 Flask Server (server.py)     <-- local MCP server (mcp_server.py)
      |                                    |
      v                                    v
-dashboard.html              Claude Desktop (reads inbox directly)
+index.html (Netlify)        Claude Desktop (reads inbox directly)
 ```
 
 ### Stack
@@ -96,7 +71,7 @@ dashboard.html              Claude Desktop (reads inbox directly)
 |---|---|
 | `server.py` | Flask API server, Microsoft Graph queries, token management |
 | `mcp_server.py` | MCP wrapper exposing server endpoints to Claude Desktop |
-| `dashboard.html` | Live web dashboard |
+| `index.html` | Live web dashboard |
 | `.env` | Your credentials (never committed) |
 | `token_cache.json` | OAuth token cache (never committed) |
 | `requirements.txt` | Python dependencies |
@@ -131,12 +106,13 @@ CLIENT_ID=your-client-id-here
 TENANT_ID=consumers
 CLIENT_SECRET=your-client-secret-here
 REDIRECT_URI=http://localhost:8080/callback
+API_KEY=your-generated-api-key-here
 ```
 
 ### 3. Install dependencies
 
 ```bash
-pip install flask flask-cors msal requests python-dotenv mcp
+pip install flask flask-cors msal requests python-dotenv mcp gunicorn
 ```
 
 ### 4. Run the server
@@ -149,7 +125,7 @@ Visit http://localhost:8080/login in your browser and sign in with your Microsof
 
 ### 5. Open the dashboard
 
-Open `dashboard.html` in your browser. It connects to your local server at http://127.0.0.1:8080.
+Open `index.html` in your browser. On first load it will prompt for your API key. Enter it once and it saves to localStorage permanently.
 
 ### 6. Claude Desktop integration (optional)
 
@@ -160,7 +136,7 @@ Add this to your Claude Desktop config file at `%APPDATA%\Claude\claude_desktop_
   "mcpServers": {
     "outlook-mail": {
       "command": "python",
-      "args": ["C:\\path\\to\\claude-mail-connector\\mcp_server.py"],
+      "args": ["C:\\path\\to\\outlook-job-tracker\\mcp_server.py"],
       "env": {}
     }
   }
@@ -168,12 +144,6 @@ Add this to your Claude Desktop config file at `%APPDATA%\Claude\claude_desktop_
 ```
 
 Restart Claude Desktop. You should see the hammer icon indicating MCP tools are connected.
-
----
-
-## Notes
-
-The built-in Microsoft 365 connector in Anthropic's MCP library only supports work and school accounts. Personal Outlook/Live accounts are not supported through that integration. This project exists because of that gap — building a custom connector was the only way to make it work with a personal account.
 
 ---
 
