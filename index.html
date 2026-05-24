@@ -577,10 +577,11 @@ function classifyEmail(email) {
 
   // Priority 1: LinkedIn pattern "Your application to ROLE at COMPANY"
   const liMatch = subjRaw.match(/^Your application to (.+?) at (.+?)$/i);
-  if (liMatch) {
-    role = liMatch[1].trim();
-    company = liMatch[2].trim();
-  }
+let liRole = '';
+if (liMatch) {
+  liRole = liMatch[1].trim();
+  company = liMatch[2].trim();
+}
 
   // Priority 1b: greenhouse "Thank you for applying to COMPANY[!]"
   if (!company) {
@@ -632,6 +633,7 @@ function classifyEmail(email) {
 
   // --- ROLE EXTRACTION ---
   let role = '';
+  if (liRole) role = liRole;
 
   // Pattern A: pipe format "Company | Role Title"
   const pipeMatch = subjRaw.match(/\|\s*(.+)$/);
