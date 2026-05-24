@@ -465,10 +465,9 @@ function getApiKey() {
 }
 
 function apiFetch(url, options = {}) {
-  const headers = { ...options.headers };
   const key = getApiKey();
-  if (key) headers['X-API-Key'] = key;
-  return fetch(url, { ...options, headers });
+  if (key) url = url + (url.includes('?') ? '&' : '?') + 'api_key=' + encodeURIComponent(key);
+  return fetch(url, options);
 }
 
 function checkApiKeySet() {
