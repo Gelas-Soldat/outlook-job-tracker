@@ -543,7 +543,9 @@ function classifyEmail(email) {
     'after careful review','after careful consideration','your resume has been submitted',
     'congratulations, your application','thank you for your interest in the',
     'your application was successfully submitted','successfully submitting your application',
-    'application for the','we have received your application'];
+    'application for the','we have received your application',
+    'phone interview','video interview','interview scheduled',
+    'schedule your interview','we would like to invite you'];
   const isJobKeyword = jobKeywords.some(k => combined.includes(k));
   const isJobSubject = /thank you for applying|thanks for applying|your application to|application for the|interview invitation/i.test(subjRaw);
 
