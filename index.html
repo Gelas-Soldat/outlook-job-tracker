@@ -714,10 +714,25 @@ if (liMatch) {
 
 
 async function classifyUnknownsWithAI(unknowns, emailMap) {
-  // Process in batches of 10 to avoid rate limits
+  if (!getAnthropicKey()) return;
+  
+  // Load AI cache from localStorage
+  let aiCache = {};
+  try { aiCache = JSON.parse(localStorage.getItem('ai-classification-cache') || '{}'); } catch(e) {}
+  
+  // Only process emails not already in cache
+  const uncached = unknowns.filter(a => !aiCache[a.id]);
+  if (uncached.length === 0) {
+    // Apply cached results to all unknowns
+    unknowns.forEach(a => {
+      if (aiCache[a.id]) Object.assign(a, aiCache[a.id]);
+    });
+    return;
+  }
+
   const batchSize = 10;
-  for (let i = 0; i < unknowns.length; i += batchSize) {
-    const batch = unknowns.slice(i, i + batchSize);
+  for (let i = 0; i < uncached.length; i += batchSize) {
+    const batch = uncached.slice(i, i + batchSize);
     await Promise.all(batch.map(async (app) => {
       const email = emailMap[app.id];
       if (!email) return;
@@ -755,20 +770,34 @@ Rules:
         const text = data.content?.[0]?.text || '';
         const clean = text.replace(/```json|```/g, '').trim();
         const parsed = JSON.parse(clean);
+        const result = {};
         if (parsed.company && parsed.company !== '' && parsed.company !== '—') {
           app.company = parsed.company;
+          result.company = parsed.company;
         }
         if (parsed.role && parsed.role !== '' && parsed.role !== '—') {
           app.role = parsed.role;
+          result.role = parsed.role;
         }
         if (parsed.status && ['applied','interview','rejected','pending'].includes(parsed.status)) {
           app.status = parsed.status;
+          result.status = parsed.status;
         }
+        // Save to cache
+        aiCache[app.id] = result;
       } catch(e) {
-        // silently fail — keep existing values
+        // silently fail
       }
     }));
   }
+  
+  // Apply cached results to remaining unknowns
+  unknowns.forEach(a => {
+    if (aiCache[a.id]) Object.assign(a, aiCache[a.id]);
+  });
+
+  // Save updated cache
+  try { localStorage.setItem('ai-classification-cache', JSON.stringify(aiCache)); } catch(e) {}
 }
 
 async function loadData() {
