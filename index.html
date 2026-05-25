@@ -1195,7 +1195,8 @@ async function deduplicateWithAI(apps) {
   if (!getAnthropicKey() || apps.length === 0) return apps;
   
   // Check if we have a cached dedup result for this exact set
-  const cacheKey = 'ai-dedup-' + apps.length;
+  // Use a hash of company names as cache key
+  const cacheKey = 'ai-dedup-' + apps.map(a => a.company + a.date).join('').length;
   try {
     const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
     if (cached && cached.length > 0) return cached;
