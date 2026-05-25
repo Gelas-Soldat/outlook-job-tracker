@@ -826,10 +826,10 @@ async function loadData() {
     }
     
     const withOverrides = applyOverrides(classified);
-    const deduped = await deduplicateWithAI(withOverrides);
+    const deduped = withOverrides;
 
     const seen = new Set();
-    allApps = deduped.filter(a => {
+    allApps = withOverrides.filter(a => {
       const key = (a.company + '|' + a.role).toLowerCase().substring(0, 60) + '|' + a.date;
       if (seen.has(key)) return false;
       seen.add(key);
