@@ -219,7 +219,7 @@
   .badge-applied { background: rgba(96,160,240,0.12); color: var(--blue); border: 1px solid rgba(96,160,240,0.25); }
   .badge-rejected { background: rgba(240,96,96,0.12); color: var(--red); border: 1px solid rgba(240,96,96,0.25); }
   .badge-interview { background: rgba(62,207,142,0.12); color: var(--green); border: 1px solid rgba(62,207,142,0.25); }
-  .badge-other { background: rgba(123,123,154,0.12); color: var(--muted); border: 1px solid rgba(123,123,154,0.25); }
+  .badge-pending { background: rgba(240,176,96,0.12); color: var(--amber); border: 1px solid rgba(240,176,96,0.25); }
   .badge::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 
   .empty { text-align: center; padding: 3rem; color: var(--muted); font-size: 13px; }
@@ -360,7 +360,7 @@
   <header>
     <div>
       <div class="logo">Job Search <span>Dashboard</span></div>
-      <div style="font-size:11px;color:var(--muted);margin-top:4px;">Your Name · your-email@example.com</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px;" id="header-sub">Job Search Dashboard</div>
     </div>
     <div style="display:flex;align-items:center;gap:12px;">
       <div class="status-bar"><div class="dot"></div><span id="last-updated">Connecting...</span></div>
@@ -370,6 +370,9 @@
     </div>
   </header>
 
+  <div id="demo-banner" style="display:none;background:rgba(124,109,240,0.1);border:1px solid rgba(124,109,240,0.3);border-radius:8px;padding:10px 16px;font-size:12px;color:var(--accent2);margin-bottom:1rem;text-align:center;">
+    ⚡ Demo Mode — showing sample data · <a href="https://github.com/Gelas-Soldat/outlook-job-tracker" target="_blank" style="color:var(--accent2);">View on GitHub</a>
+  </div>
   <div id="sync-banner" style="display:none;background:rgba(62,207,142,0.1);border:1px solid rgba(62,207,142,0.3);border-radius:8px;padding:12px 16px;font-size:12px;color:var(--green);margin-bottom:1rem;"></div>
   <div class="error-banner" id="error-banner">
     Could not connect to server at <strong>https://outlook-job-tracker.onrender.com</strong>. The server may be starting up — try again in 30 seconds.
@@ -422,7 +425,7 @@
         <button class="filter-btn" onclick="setFilter('interview',this)">Interview</button>
         <button class="filter-btn" onclick="setFilter('pending',this)">Pending</button>
         <button class="filter-btn" onclick="setFilter('applied',this)">Applied</button>
-        <button class="filter-btn" onclick="setFilter('other',this)">Other</button>
+        <button class="filter-btn" onclick="setFilter('rejected',this)">Rejected</button>
       </div>
     </div>
   </div>
@@ -459,19 +462,17 @@
 
 <script>
 const SERVER = 'https://outlook-job-tracker.onrender.com';
-
-function getAnthropicKey() {
-  return localStorage.getItem('anthropic-api-key') || '';
-}
+const DEMO_MODE = new URLSearchParams(window.location.search).get('demo') === 'true';
 
 function getApiKey() {
   return localStorage.getItem('dashboard-api-key') || '';
 }
 
 function apiFetch(url, options = {}) {
+  const headers = { ...options.headers };
   const key = getApiKey();
-  if (key) url = url + (url.includes('?') ? '&' : '?') + 'api_key=' + encodeURIComponent(key);
-  return fetch(url, options);
+  if (key) headers['X-API-Key'] = key;
+  return fetch(url, { ...options, headers });
 }
 
 function checkApiKeySet() {
@@ -486,8 +487,6 @@ function saveApiKey() {
   const key = document.getElementById('api-key-input').value.trim();
   if (!key) return;
   localStorage.setItem('dashboard-api-key', key);
-  const anthropicKey = document.getElementById('anthropic-key-input').value.trim();
-  if (anthropicKey) localStorage.setItem('anthropic-api-key', anthropicKey);
   document.getElementById('api-key-overlay').style.display = 'none';
   loadData();
 }
@@ -543,9 +542,7 @@ function classifyEmail(email) {
     'after careful review','after careful consideration','your resume has been submitted',
     'congratulations, your application','thank you for your interest in the',
     'your application was successfully submitted','successfully submitting your application',
-    'application for the','we have received your application',
-    'phone interview','video interview','interview scheduled',
-    'schedule your interview','we would like to invite you'];
+    'application for the','we have received your application'];
   const isJobKeyword = jobKeywords.some(k => combined.includes(k));
   const isJobSubject = /thank you for applying|thanks for applying|your application to|application for the|interview invitation/i.test(subjRaw);
 
@@ -579,11 +576,10 @@ function classifyEmail(email) {
 
   // Priority 1: LinkedIn pattern "Your application to ROLE at COMPANY"
   const liMatch = subjRaw.match(/^Your application to (.+?) at (.+?)$/i);
-let liRole = '';
-if (liMatch) {
-  liRole = liMatch[1].trim();
-  company = liMatch[2].trim();
-}
+  if (liMatch) {
+    role = liMatch[1].trim();
+    company = liMatch[2].trim();
+  }
 
   // Priority 1b: greenhouse "Thank you for applying to COMPANY[!]"
   if (!company) {
@@ -635,7 +631,6 @@ if (liMatch) {
 
   // --- ROLE EXTRACTION ---
   let role = '';
-  if (liRole) role = liRole;
 
   // Pattern A: pipe format "Company | Role Title"
   const pipeMatch = subjRaw.match(/\|\s*(.+)$/);
@@ -715,38 +710,47 @@ if (liMatch) {
 }
 
 
-async function classifyUnknownsWithAI(unknowns, emailMap) {
-  if (!getAnthropicKey()) return;
-  
-  // Load AI cache from localStorage
-  let aiCache = {};
-  try { aiCache = JSON.parse(localStorage.getItem('ai-classification-cache') || '{}'); } catch(e) {}
-  
-  // Only process emails not already in cache
-  const uncached = unknowns.filter(a => !aiCache[a.id]);
-  if (uncached.length === 0) {
-    // Apply cached results to all unknowns
-    unknowns.forEach(a => {
-      if (aiCache[a.id]) Object.assign(a, aiCache[a.id]);
-    });
-    return;
-  }
 
+const DEMO_DATA = [
+  { company: 'Citadel', role: 'Quantitative Data Analyst', date: 'May 24', rawDate: '2026-05-24T10:00:00Z', status: 'applied', notes: 'Under review', id: 'd1' },
+  { company: 'BlackRock', role: 'Financial Data Analyst', date: 'May 23', rawDate: '2026-05-23T10:00:00Z', status: 'interview', notes: 'Interview invite received', id: 'd2' },
+  { company: 'JPMorgan Chase', role: 'Risk Analyst', date: 'May 22', rawDate: '2026-05-22T10:00:00Z', status: 'applied', notes: 'Under review', id: 'd3' },
+  { company: 'Coinbase', role: 'Crypto Operations Analyst', date: 'May 21', rawDate: '2026-05-21T10:00:00Z', status: 'rejected', notes: 'Not moving forward', id: 'd4' },
+  { company: 'Goldman Sachs', role: 'Data Analyst', date: 'May 20', rawDate: '2026-05-20T10:00:00Z', status: 'applied', notes: 'Under review', id: 'd5' },
+  { company: 'Fidelity Investments', role: 'Financial Analyst', date: 'May 19', rawDate: '2026-05-19T10:00:00Z', status: 'interview', notes: 'Interview invite received', id: 'd6' },
+  { company: 'Morgan Stanley', role: 'Business Analyst', date: 'May 18', rawDate: '2026-05-18T10:00:00Z', status: 'applied', notes: 'Under review', id: 'd7' },
+  { company: 'Kraken', role: 'Crypto Risk Analyst', date: 'May 17', rawDate: '2026-05-17T10:00:00Z', status: 'rejected', notes: 'Not moving forward', id: 'd8' },
+  { company: 'Bloomberg', role: 'Financial Data Engineer', date: 'May 16', rawDate: '2026-05-16T10:00:00Z', status: 'applied', notes: 'Under review', id: 'd9' },
+  { company: 'Vanguard', role: 'Investment Analyst', date: 'May 15', rawDate: '2026-05-15T10:00:00Z', status: 'pending', notes: 'Under review', id: 'd10' },
+  { company: 'Stripe', role: 'Financial Operations Analyst', date: 'May 14', rawDate: '2026-05-14T10:00:00Z', status: 'applied', notes: 'Under review', id: 'd11' },
+  { company: 'Gemini', role: 'Derivatives Analyst', date: 'May 13', rawDate: '2026-05-13T10:00:00Z', status: 'interview', notes: 'Interview invite received', id: 'd12' },
+  { company: 'Wells Fargo', role: 'Data Analyst', date: 'May 12', rawDate: '2026-05-12T10:00:00Z', status: 'applied', notes: 'Under review', id: 'd13' },
+  { company: 'Chainalysis', role: 'Blockchain Data Analyst', date: 'May 11', rawDate: '2026-05-11T10:00:00Z', status: 'rejected', notes: 'Not moving forward', id: 'd14' },
+  { company: 'Charles Schwab', role: 'Financial Analyst', date: 'May 10', rawDate: '2026-05-10T10:00:00Z', status: 'applied', notes: 'Under review', id: 'd15' },
+  { company: 'Binance US', role: 'Risk & Compliance Analyst', date: 'May 9', rawDate: '2026-05-09T10:00:00Z', status: 'applied', notes: 'Under review', id: 'd16' },
+  { company: 'Robinhood', role: 'Data Analyst', date: 'May 8', rawDate: '2026-05-08T10:00:00Z', status: 'pending', notes: 'Under review', id: 'd17' },
+  { company: 'Plaid', role: 'Financial Data Analyst', date: 'May 7', rawDate: '2026-05-07T10:00:00Z', status: 'applied', notes: 'Under review', id: 'd18' },
+  { company: 'Two Sigma', role: 'Quantitative Analyst', date: 'May 6', rawDate: '2026-05-06T10:00:00Z', status: 'applied', notes: 'Under review', id: 'd19' },
+  { company: 'Anchorage Digital', role: 'Crypto Risk Analyst', date: 'May 5', rawDate: '2026-05-05T10:00:00Z', status: 'rejected', notes: 'Not moving forward', id: 'd20' },
+  { company: 'Visa', role: 'Business Data Analyst', date: 'May 4', rawDate: '2026-05-04T10:00:00Z', status: 'applied', notes: 'Under review', id: 'd21' },
+  { company: 'PayPal', role: 'Financial Analyst', date: 'May 3', rawDate: '2026-05-03T10:00:00Z', status: 'applied', notes: 'Under review', id: 'd22' },
+  { company: 'Polygon Labs', role: 'Lead Solutions Engineer', date: 'May 2', rawDate: '2026-05-02T10:00:00Z', status: 'interview', notes: 'Interview invite received', id: 'd23' },
+  { company: 'SitusAMC', role: 'Financial Risk Analyst', date: 'May 1', rawDate: '2026-05-01T10:00:00Z', status: 'applied', notes: 'Under review', id: 'd24' },
+  { company: 'LPL Financial', role: 'Data Analyst', date: 'Apr 30', rawDate: '2026-04-30T10:00:00Z', status: 'applied', notes: 'Under review', id: 'd25' }
+];
+
+async function classifyUnknownsWithAI(unknowns, emailMap) {
+  // Process in batches of 10 to avoid rate limits
   const batchSize = 10;
-  for (let i = 0; i < uncached.length; i += batchSize) {
-    const batch = uncached.slice(i, i + batchSize);
+  for (let i = 0; i < unknowns.length; i += batchSize) {
+    const batch = unknowns.slice(i, i + batchSize);
     await Promise.all(batch.map(async (app) => {
       const email = emailMap[app.id];
       if (!email) return;
       try {
         const response = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': getAnthropicKey(),
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model: 'claude-haiku-4-5-20251001',
             max_tokens: 150,
@@ -772,34 +776,20 @@ Rules:
         const text = data.content?.[0]?.text || '';
         const clean = text.replace(/```json|```/g, '').trim();
         const parsed = JSON.parse(clean);
-        const result = {};
         if (parsed.company && parsed.company !== '' && parsed.company !== '—') {
           app.company = parsed.company;
-          result.company = parsed.company;
         }
         if (parsed.role && parsed.role !== '' && parsed.role !== '—') {
           app.role = parsed.role;
-          result.role = parsed.role;
         }
         if (parsed.status && ['applied','interview','rejected','pending'].includes(parsed.status)) {
           app.status = parsed.status;
-          result.status = parsed.status;
         }
-        // Save to cache
-        aiCache[app.id] = result;
       } catch(e) {
-        // silently fail
+        // silently fail — keep existing values
       }
     }));
   }
-  
-  // Apply cached results to remaining unknowns
-  unknowns.forEach(a => {
-    if (aiCache[a.id]) Object.assign(a, aiCache[a.id]);
-  });
-
-  // Save updated cache
-  try { localStorage.setItem('ai-classification-cache', JSON.stringify(aiCache)); } catch(e) {}
 }
 
 async function loadData() {
@@ -826,7 +816,6 @@ async function loadData() {
     }
     
     const withOverrides = applyOverrides(classified);
-    const deduped = withOverrides;
 
     const seen = new Set();
     allApps = withOverrides.filter(a => {
@@ -943,8 +932,7 @@ function renderTable() {
     applied: '<span class="badge badge-applied">Applied</span>',
     interview: '<span class="badge badge-interview">Interview</span>',
     rejected: '<span class="badge badge-rejected">Rejected</span>',
-    pending: '<span class="badge badge-pending">Pending</span>',
-    other: '<span class="badge badge-other">Other</span>'
+    pending: '<span class="badge badge-pending">Pending</span>'
   };
 
   const tbody = document.getElementById('tbody');
@@ -1192,64 +1180,10 @@ async function fetchFromEmail() {
   setTimeout(() => { btn.textContent = '↓ Auto-fill from email'; btn.disabled = false; }, 2000);
 }
 
-async function deduplicateWithAI(apps) {
-  if (!getAnthropicKey() || apps.length === 0) return apps;
-  
-  // Check if we have a cached dedup result for this exact set
-  // Use a hash of company names as cache key
-  const cacheKey = 'ai-dedup-' + apps.map(a => a.company + a.date).join('').length;
-  try {
-    const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
-    if (cached && cached.length > 0) return cached;
-  } catch(e) {}
-
-  try {
-    const simplified = apps.map((a, i) => ({
-      idx: i, company: a.company, role: a.role, date: a.date, status: a.status
-    }));
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': getAnthropicKey(),
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2000,
-        messages: [{
-          role: 'user',
-          content: `Deduplicate this job application list. Return ONLY a JSON array of indices to KEEP.
-
-Rules:
-- Same company + same/similar role = duplicate, keep one
-- Prefer interview/rejected over applied/pending status
-- Prefer entries with role filled in over "—"
-- Different roles at same company = NOT duplicates
-- Keep the most informative/recent entry
-
-Applications:
-${JSON.stringify(simplified)}
-
-Return only the JSON array of indices, e.g. [0,2,5,7]`
-        }]
-      })
-    });
-    const data = await response.json();
-    const text = data.content?.[0]?.text || '';
-    const clean = text.replace(/```json|```/g, '').trim();
-    const keepIndices = JSON.parse(clean);
-    const result = keepIndices.map(i => apps[i]).filter(Boolean);
-    
-    // Cache the result
-    try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch(e) {}
-    return result;
-  } catch(e) {
-    return apps;
-  }
+if (DEMO_MODE) {
+  document.getElementById('demo-banner').style.display = 'block';
+  document.getElementById('header-sub').textContent = 'Demo Mode · Sample Data';
 }
-
 loadData();
 </script>
 
@@ -1260,7 +1194,6 @@ loadData();
     <h2>Enter API Key</h2>
     <p>This dashboard connects to your private Outlook server. Enter your API key to continue. It will be saved on this device.</p>
     <input type="password" id="api-key-input" placeholder="Paste your API key here..." onkeydown="if(event.key==='Enter') saveApiKey()">
-    <input type="password" id="anthropic-key-input" placeholder="Anthropic API key (optional, for AI classification)..." onkeydown="if(event.key==='Enter') saveApiKey()">
     <button onclick="saveApiKey()">Connect Dashboard</button>
   </div>
 </div>
@@ -1285,7 +1218,6 @@ loadData();
         <option value="interview">Interview</option>
         <option value="rejected">Rejected</option>
         <option value="pending">Pending</option>
-        <option value="other">Other</option>
       </select>
     </div>
     <div class="field">
