@@ -476,6 +476,7 @@ function apiFetch(url, options = {}) {
 }
 
 function checkApiKeySet() {
+  if (DEMO_MODE) return true;
   if (!getApiKey()) {
     document.getElementById('api-key-overlay').style.display = 'flex';
     return false;
