@@ -219,7 +219,7 @@
   .badge-applied { background: rgba(96,160,240,0.12); color: var(--blue); border: 1px solid rgba(96,160,240,0.25); }
   .badge-rejected { background: rgba(240,96,96,0.12); color: var(--red); border: 1px solid rgba(240,96,96,0.25); }
   .badge-interview { background: rgba(62,207,142,0.12); color: var(--green); border: 1px solid rgba(62,207,142,0.25); }
-  .badge-pending { background: rgba(240,176,96,0.12); color: var(--amber); border: 1px solid rgba(240,176,96,0.25); }
+  .badge-other { background: rgba(123,123,154,0.12); color: var(--muted); border: 1px solid rgba(123,123,154,0.25); }
   .badge::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 
   .empty { text-align: center; padding: 3rem; color: var(--muted); font-size: 13px; }
@@ -422,7 +422,7 @@
         <button class="filter-btn" onclick="setFilter('interview',this)">Interview</button>
         <button class="filter-btn" onclick="setFilter('pending',this)">Pending</button>
         <button class="filter-btn" onclick="setFilter('applied',this)">Applied</button>
-        <button class="filter-btn" onclick="setFilter('rejected',this)">Rejected</button>
+        <button class="filter-btn" onclick="setFilter('other',this)">Other</button>
       </div>
     </div>
   </div>
@@ -943,7 +943,8 @@ function renderTable() {
     applied: '<span class="badge badge-applied">Applied</span>',
     interview: '<span class="badge badge-interview">Interview</span>',
     rejected: '<span class="badge badge-rejected">Rejected</span>',
-    pending: '<span class="badge badge-pending">Pending</span>'
+    pending: '<span class="badge badge-pending">Pending</span>',
+    other: '<span class="badge badge-other">Other</span>'
   };
 
   const tbody = document.getElementById('tbody');
@@ -1284,6 +1285,7 @@ loadData();
         <option value="interview">Interview</option>
         <option value="rejected">Rejected</option>
         <option value="pending">Pending</option>
+        <option value="other">Other</option>
       </select>
     </div>
     <div class="field">
